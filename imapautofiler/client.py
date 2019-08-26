@@ -25,20 +25,19 @@ import imapclient
 
 from . import secrets
 
-LOG = logging.getLogger('imapautofiler.client')
+LOG = logging.getLogger("imapautofiler.client")
 
 
 def open_connection(cfg):
     "Open a connection to the mail server."
-    if 'server' in cfg:
+    if "server" in cfg:
         return IMAPClient(cfg)
-    if 'maildir' in cfg:
+    if "maildir" in cfg:
         return MaildirClient(cfg)
-    raise ValueError('Could not find connection information in config')
+    raise ValueError("Could not find connection information in config")
 
 
 class Client(metaclass=abc.ABCMeta):
-
     def __init__(self, cfg):
         self._cfg = cfg
 
@@ -81,17 +80,8 @@ class Client(metaclass=abc.ABCMeta):
         :type message: email.message.Message
 
         """
-        self.copy_message(
-            src_mailbox,
-            dest_mailbox,
-            message_id,
-            message,
-        )
-        self.delete_message(
-            src_mailbox,
-            message_id,
-            message,
-        )
+        self.copy_message(src_mailbox, dest_mailbox, message_id, message)
+        self.delete_message(src_mailbox, message_id, message)
 
     @abc.abstractmethod
     def delete_message(self, src_mailbox, message_id, message):
@@ -116,42 +106,36 @@ class Client(metaclass=abc.ABCMeta):
 
 
 class IMAPClient(Client):
-
     def __init__(self, cfg):
         super().__init__(cfg)
 
         # Use default client behavior if ca_file not provided.
         context = None
-        if 'ca_file' in cfg['server']:
-            context = ssl.create_default_context(
-                cafile=cfg['server']['ca_file']
-            )
+        if "ca_file" in cfg["server"]:
+            context = ssl.create_default_context(cafile=cfg["server"]["ca_file"])
 
         self._conn = imapclient.IMAPClient(
-            cfg['server']['hostname'],
+            cfg["server"]["hostname"],
             use_uid=True,
             ssl=True,
-            port=cfg['server'].get('port'),
+            port=cfg["server"].get("port"),
             ssl_context=context,
         )
-        username = cfg['server']['username']
+        username = cfg["server"]["username"]
         password = secrets.get_password(cfg)
         self._conn.login(username, password)
 
     def list_mailboxes(self):
         "Return a list of folder names."
-        return (
-            f[-1]
-            for f in self._conn.list_folders()
-        )
+        return (f[-1] for f in self._conn.list_folders())
 
     def mailbox_iterate(self, mailbox_name):
         self._conn.select_folder(mailbox_name)
-        msg_ids = self._conn.search(['ALL'])
+        msg_ids = self._conn.search(["ALL"])
         for msg_id in msg_ids:
             email_parser = email.parser.BytesFeedParser()
-            response = self._conn.fetch([msg_id], ['BODY.PEEK[HEADER]'])
-            email_parser.feed(response[msg_id][b'BODY[HEADER]'])
+            response = self._conn.fetch([msg_id], ["BODY.PEEK[HEADER]"])
+            email_parser.feed(response[msg_id][b"BODY[HEADER]"])
             message = email_parser.close()
             yield (msg_id, message)
 
@@ -173,16 +157,15 @@ class IMAPClient(Client):
 
 
 class MaildirClient(Client):
-
     def __init__(self, cfg):
         super().__init__(cfg)
-        self._root = os.path.expanduser(cfg['maildir'])
-        LOG.debug('maildir: %s', self._root)
+        self._root = os.path.expanduser(cfg["maildir"])
+        LOG.debug("maildir: %s", self._root)
 
     @contextlib.contextmanager
     def _locked(self, mailbox_name):
         path = os.path.join(self._root, mailbox_name)
-        LOG.debug('locking %s', path)
+        LOG.debug("locking %s", path)
         box = mailbox.Maildir(path)
         box.lock()
         try:
@@ -208,6 +191,12 @@ class MaildirClient(Client):
     def delete_message(self, src_mailbox, message_id, message):
         with self._locked(src_mailbox) as box:
             box.remove(message_id)
+
+    def flag(self, message, flag):
+        imapclient.add_flags(message, flag, silent=False)
+
+    def remove_flag(self, message, flag):
+        imapclient.remove_flags(message, flag, silent=False)
 
     def expunge(self):
         pass
