@@ -43,7 +43,7 @@ def list_mailboxes(cfg, debug, conn):
         print(f)
 
 
-def process_rules(cfg, debug, conn, dry_run=False):
+def process_rules(cfg, debug, conn, today, dry_run=False):
     """Run the rules from the configuration file.
 
     :param cfg: full configuration
@@ -66,7 +66,7 @@ def process_rules(cfg, debug, conn, dry_run=False):
             for r in mailbox['rules']
         ]
 
-        for (msg_id, message) in conn.mailbox_iterate(mailbox_name):
+        for (msg_id, message) in conn.mailbox_iterate(mailbox_name, today):
             num_messages += 1
             if debug:
                 print(message.as_string().rstrip())
@@ -115,6 +115,12 @@ def main(args=None):
         help='report more details about what is happening',
     )
     parser.add_argument(
+        '-t', '--today',
+        action='store_true',
+        default=False,
+        help='search today\'s messages',
+    )
+    parser.add_argument(
         '--debug',
         action='store_true',
         default=False,
@@ -159,14 +165,14 @@ def main(args=None):
             if args.list_mailboxes:
                 list_mailboxes(cfg, args.debug, conn)
             else:
-                process_rules(cfg, args.debug, conn, args.dry_run)
+                process_rules(cfg, args.debug, conn, args.today, args.dry_run)
         finally:
             conn.close()
     except Exception as err:
         if args.debug:
             raise
         parser.error(err)
-    return 0
+    return 0report more details about what is happening
 
 
 if __name__ == '__main__':
