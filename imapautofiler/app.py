@@ -172,8 +172,7 @@ def main(args=None):
         if args.debug:
             raise
         parser.error(err)
-    return 0report more details about what is happening
-
+    return 0
 
 if __name__ == '__main__':
     sys.exit(main())
